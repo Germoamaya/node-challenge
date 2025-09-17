@@ -1,6 +1,5 @@
 import { Controller, Get } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
-import { User } from './entities/user.entity';
 import { MikroORM } from '@mikro-orm/core';
 @Controller()
 export class AppController {
@@ -21,22 +20,6 @@ export class AppController {
       return { status: 'Database connected!', result };
     } catch (error) {
       return { status: 'Database error', error: error.message };
-    }
-  }
-
-  @Get('create-user')
-  async createUser() {
-    try {
-      const user = this.em.create(User, {
-        name: 'Admin User',
-        email: 'admin@example.com',
-        password: 'password123',
-        idx: 'admin-user-id',
-      });
-      await this.em.persistAndFlush(user);
-      return { status: 'User created!', user };
-    } catch (error) {
-      return { status: 'Error creating user', error: error.message };
     }
   }
 

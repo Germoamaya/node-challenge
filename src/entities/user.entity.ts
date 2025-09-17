@@ -1,20 +1,19 @@
 import { Entity, PrimaryKey, Property } from '@mikro-orm/core';
-import { randomUUID } from 'node:crypto';
 
 @Entity()
 export class User {
   @PrimaryKey({ hidden: false, index: true })
   id!: number;
 
-  @Property({ index: true })
-  idx?: string = randomUUID();
-
-  @Property()
-  name!: string;
-
   @Property({ unique: true })
-  email!: string;
+  username!: string;
 
   @Property()
   password!: string;
+
+  @Property()
+  createdAt?: Date = new Date();
+
+  @Property({ onUpdate: () => new Date() })
+  updatedAt?: Date = new Date();
 }

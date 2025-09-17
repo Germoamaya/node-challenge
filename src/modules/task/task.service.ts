@@ -1,4 +1,4 @@
-import { Task, User } from 'src/entities';
+import { Task, User } from '../../entities';
 import { EntityManager } from '@mikro-orm/core';
 import { Injectable } from '@nestjs/common';
 import { CreateTaskDto, UpdateTaskDto } from './dtos';

@@ -8,6 +8,7 @@ import {
   Param,
   HttpCode,
   HttpStatus,
+  Request,
 } from '@nestjs/common';
 import { TaskService } from './task.service';
 import { CreateTaskDto, UpdateTaskDto } from './dtos';
@@ -17,34 +18,39 @@ export class TaskController {
   constructor(private readonly taskService: TaskService) {}
 
   @Get()
-  async findAll() {
-    // For now, using hardcoded userId - we'll add auth later
-    const userId = 1;
+  async findAll(@Request() req) {
+    const userId = req.user.userId;
     return this.taskService.findAll(userId);
   }
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  async create(@Body() createTaskDto: CreateTaskDto) {
-    // For now, using hardcoded userId - we'll add auth later
-    const userId = 1;
+  async create(@Body() createTaskDto: CreateTaskDto, @Request() req) {
+    const userId = req.user.userId;
     return this.taskService.create(createTaskDto, userId);
   }
 
   @Get(':id')
-  async findOne(@Param('id') id: number) {
-    return this.taskService.findOne(id);
+  async findOne(@Param('id') id: number, @Request() req) {
+    const userId = req.user.userId;
+    return this.taskService.findOne(userId);
   }
 
   @Patch(':id')
-  async update(@Param('id') id: number, @Body() updateTaskDto: UpdateTaskDto) {
-    return this.taskService.update(id, updateTaskDto);
+  async update(
+    @Param('id') id: number,
+    @Body() updateTaskDto: UpdateTaskDto,
+    @Request() req,
+  ) {
+    const userId = req.user.userId;
+    return this.taskService.update(userId, updateTaskDto);
   }
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  async delete(@Param('id') id: number) {
-    return this.taskService.delete(id);
+  async delete(@Param('id') id: number, @Request() req) {
+    const userId = req.user.userId;
+    return this.taskService.delete(userId);
   }
 
   @Get('populate')
