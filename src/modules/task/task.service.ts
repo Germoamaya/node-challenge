@@ -5,13 +5,12 @@ import { HttpService } from '@nestjs/axios';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Task, User } from '../../entities';
-import { CacheOperation } from '../../common/enums';
 import { Role, TaskPriority } from '../../common/enums';
-import { CreateTaskDto, UpdateTaskDto } from './dtos';
+import { CreateTaskDto, TaskQueryDto, UpdateTaskDto } from './dtos';
 import { ExternalTaskDto } from './dtos/external-task.dto';
 interface CacheManager {
-  get(key: string): Promise<any>;
-  set(key: string, value: Task[], ttl?: number): Promise<void>;
+  get<T = any>(key: string): Promise<T | undefined>;
+  set<T = any>(key: string, value: T, ttl?: number): Promise<void>;
   del(key: string): Promise<void>;
 }
 
@@ -24,70 +23,58 @@ export class TaskService {
     @Inject(CACHE_MANAGER) private cacheManager: CacheManager,
   ) {}
 
-  private async updateTaskCache(
-    operation: CacheOperation,
-    task: Task,
-    userId: number,
-  ): Promise<void> {
-    const cacheKey = `tasks:${userId}`;
-    const cachedTasks: Task[] = await this.cacheManager.get(cacheKey);
-    if (!cachedTasks) return;
-
-    switch (operation) {
-      case CacheOperation.ADD:
-        {
-          cachedTasks.push(task);
-          await this.cacheManager.set(cacheKey, cachedTasks, 600000);
-        }
-        break;
-
-      case CacheOperation.UPDATE:
-        {
-          const taskIndex = cachedTasks.findIndex((t) => t.id === task.id);
-          if (taskIndex !== -1) {
-            cachedTasks[taskIndex] = task;
-            await this.cacheManager.set(cacheKey, cachedTasks, 600000);
-          }
-        }
-        break;
-
-      case CacheOperation.DELETE: {
-        const filteredTasks: Task[] = cachedTasks.filter(
-          (t) => t.id !== task.id,
-        );
-        await this.cacheManager.set(cacheKey, filteredTasks, 600000);
-        break;
-      }
-    }
+  private buildListKey(userId: number, q: Partial<TaskQueryDto>) {
+    const p = q.priority ?? 'all';
+    const c = typeof q.completed === 'boolean' ? String(q.completed) : 'any';
+    const page = q.page ?? 1;
+    const limit = q.limit ?? 5;
+    return `tasks:${userId}:p=${p}:c=${c}:page=${page}:limit=${limit}`;
   }
 
-  async findAll(userId: number): Promise<Task[]> {
-    const cacheKey = `tasks:${userId}`;
-    const cachedTasks = await this.cacheManager.get(cacheKey);
-    if (cachedTasks) {
-      return cachedTasks;
+  private indexKey(userId: number) {
+    return `tasks:index:${userId}`; // stores all list-keys for this user
+  }
+
+  private async invalidateUserLists(userId: number) {
+    const idxKey = this.indexKey(userId);
+    const keys: string[] = (await this.cacheManager.get(idxKey)) || [];
+    if (keys.length) {
+      await Promise.all(keys.map((k) => this.cacheManager.del(k)));
     }
+    await this.cacheManager.del(idxKey);
+  }
 
-    const tasks = await this.em.find(Task, { user: userId });
+  async findAll(userId: number, query: TaskQueryDto) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 5;
+    const offset = (page - 1) * limit;
 
-    await this.cacheManager.set(cacheKey, tasks, 600000);
+    const where: any = { user: userId };
+    if (query.priority) where.priority = query.priority;
+    if (typeof query.completed === 'boolean') where.completed = query.completed;
 
-    return tasks;
+    const cacheKey = this.buildListKey(userId, query);
+    const cached = await this.cacheManager.get<{
+      data: Task[];
+      page: number;
+      limit: number;
+      total: number;
+    }>(cacheKey);
+    if (cached) return cached;
+
+    const [data, total] = await this.em.findAndCount(Task, where, {
+      limit,
+      offset,
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const response = { data, page, limit, total };
+    await this.cacheManager.set(cacheKey, response, 600_000);
+    return response;
   }
 
   async findOne(id: number, userId: number): Promise<Task> {
-    const cacheKey = `tasks:${userId}`;
-    const cachedTasks: Task[] = await this.cacheManager.get(cacheKey);
-    if (cachedTasks) {
-      const task = cachedTasks.find((t) => t.id === id);
-      if (task) {
-        return task;
-      }
-    }
-
-    const task = await this.em.findOneOrFail(Task, { id, user: userId });
-    await this.updateTaskCache(CacheOperation.ADD, task, userId);
-    return task;
+    return this.em.findOneOrFail(Task, { id, user: userId });
   }
 
   async create(dto: CreateTaskDto, userId: number): Promise<Task> {
@@ -97,9 +84,8 @@ export class TaskService {
       completed: false,
       description: dto.description || '',
     });
-
     await this.em.persistAndFlush(task);
-    await this.updateTaskCache(CacheOperation.ADD, task, userId);
+    await this.invalidateUserLists(userId);
     this.eventEmitter.emit('TASK_CREATED', task);
     return task;
   }
@@ -108,13 +94,13 @@ export class TaskService {
     const task = await this.em.findOneOrFail(Task, { id, user: userId });
     const wasCompleted = task.completed;
 
-    task.completed = dto.completed;
-    await this.em.persistAndFlush(task);
-    await this.updateTaskCache(CacheOperation.UPDATE, task, userId);
-    if (dto.completed && !wasCompleted) {
-      this.eventEmitter.emit('TASK_COMPLETED', task);
-    }
+    if (dto.completed !== undefined) task.completed = dto.completed;
 
+    await this.em.persistAndFlush(task);
+    await this.invalidateUserLists(userId);
+
+    if (dto.completed && !wasCompleted)
+      this.eventEmitter.emit('TASK_COMPLETED', task);
     return task;
   }
 
@@ -123,13 +109,12 @@ export class TaskService {
     userId: number,
     userRoles?: string[],
   ): Promise<void> {
-    // Admin can delete any task, regular users can only delete their own
     const query = userRoles?.includes(Role.ADMIN)
       ? { id }
       : { id, user: userId };
     const task = await this.em.findOneOrFail(Task, query);
     await this.em.removeAndFlush(task);
-    await this.updateTaskCache(CacheOperation.DELETE, task, task.user.id);
+    await this.invalidateUserLists(task.user.id);
   }
 
   async populateFromExternalApi(): Promise<{
