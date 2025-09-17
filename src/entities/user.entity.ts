@@ -1,4 +1,5 @@
-import { Entity, PrimaryKey, Property } from '@mikro-orm/core';
+import { Entity, PrimaryKey, Property, Enum } from '@mikro-orm/core';
+import { Role } from '../common/enums/role.enum';
 
 @Entity()
 export class User {
@@ -10,6 +11,9 @@ export class User {
 
   @Property()
   password!: string;
+
+  @Enum({ items: () => Role, array: true })
+  roles?: Role[];
 
   @Property()
   createdAt?: Date = new Date();

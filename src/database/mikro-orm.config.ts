@@ -22,5 +22,9 @@ export const getDatabaseConfig = (configService: ConfigService): Options => {
     migrations: {
       disableForeignKeys: true,
     },
+    seeder: {
+      path: 'src/database/seeders',
+      defaultSeeder: 'DatabaseSeeder',
+    },
   });
 };

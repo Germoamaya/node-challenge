@@ -1,16 +1,8 @@
 import { Body, Controller, Post, HttpCode, HttpStatus } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { CreateUserDto } from '../user/dtos/create-user.dto';
+import { CreateUserDto } from './dtos/create-user.dto';
 import { Public } from '../../common/decorators/public.decorator';
-
-export class LoginDto {
-  username: string;
-  password: string;
-}
-
-export class RefreshTokenDto {
-  refreshToken: string;
-}
+import { LoginDto, RefreshTokenDto } from './dtos';
 
 @Controller('auth')
 export class AuthController {

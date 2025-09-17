@@ -16,6 +16,7 @@ export class JwtAuthService {
     const payload = {
       userId: user.id,
       username: user.username,
+      roles: user.roles,
       type: 'access',
     };
 
@@ -29,6 +30,7 @@ export class JwtAuthService {
     const payload = {
       userId: user.id,
       username: user.username,
+      roles: user.roles,
       type: 'refresh',
     };
 

@@ -1,5 +1,5 @@
 import { IsString, IsNotEmpty, IsEnum, IsOptional } from 'class-validator';
-import { TaskPriority } from 'src/entities';
+import { TaskPriority } from '../../../common/enums';
 
 export class CreateTaskDto {
   @IsString()

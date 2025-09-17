@@ -1,20 +1,11 @@
 import { Entity, PrimaryKey, Property, Enum, ManyToOne } from '@mikro-orm/core';
 import { User } from './user.entity';
-import { randomUUID } from 'node:crypto';
-
-export enum TaskPriority {
-  LOW = 'low',
-  MEDIUM = 'medium',
-  HIGH = 'high',
-}
+import { TaskPriority } from 'src/common/enums';
 
 @Entity()
 export class Task {
   @PrimaryKey({ hidden: false, index: true })
   id!: number;
-
-  @Property({ index: true })
-  idx?: string = randomUUID();
 
   @Property()
   title!: string;

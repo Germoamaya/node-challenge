@@ -4,8 +4,9 @@ import {
   ConflictException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { CreateUserDto } from '../user/dtos/create-user.dto';
+import { CreateUserDto } from './dtos/create-user.dto';
 import { User, RefreshToken } from 'src/entities';
+import { Role } from '../../common/enums';
 import * as argon2 from 'argon2';
 import { JwtAuthService } from './strategies/jwt.service';
 
@@ -29,6 +30,7 @@ export class AuthService {
     const user = this.em.create(User, {
       ...dto,
       password: hashedPassword,
+      roles: [Role.USER],
     });
 
     await this.em.persistAndFlush(user);
