@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { MikroOrmModule } from '@mikro-orm/nestjs';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { getDatabaseConfig } from './database/mikro-orm.config';
 import { Task, User, RefreshToken } from './entities';
 import { AppController } from './app.controller';
@@ -21,6 +22,7 @@ import { GuardsModule } from './common/guards/guards.module';
     TaskModule,
     AuthModule,
     GuardsModule,
+    EventEmitterModule.forRoot(),
   ],
   controllers: [AppController],
 })

@@ -3,6 +3,7 @@ import { Role, TaskPriority } from '../../common/enums';
 import { EntityManager } from '@mikro-orm/core';
 import { Injectable } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { CreateTaskDto, UpdateTaskDto } from './dtos';
 import { ExternalTaskDto } from './dtos/external-task.dto';
 import { firstValueFrom } from 'rxjs';
@@ -12,6 +13,7 @@ export class TaskService {
   constructor(
     private readonly em: EntityManager,
     private readonly httpService: HttpService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   async findAll(userId: number): Promise<Task[]> {
@@ -30,13 +32,20 @@ export class TaskService {
       description: dto.description || '',
     });
     await this.em.persistAndFlush(task);
+    this.eventEmitter.emit('TASK_CREATED', task);
     return task;
   }
 
   async update(id: number, dto: UpdateTaskDto, userId: number): Promise<Task> {
     const task = await this.em.findOneOrFail(Task, { id, user: userId });
+    const wasCompleted = task.completed;
+
     task.completed = dto.completed;
     await this.em.persistAndFlush(task);
+
+    if (dto.completed && !wasCompleted) {
+      this.eventEmitter.emit('TASK_COMPLETED', task);
+    }
     return task;
   }
 
@@ -104,6 +113,7 @@ export class TaskService {
         });
 
         await this.em.persistAndFlush(task);
+        this.eventEmitter.emit('TASK_CREATED', task);
         imported++;
       }
 
