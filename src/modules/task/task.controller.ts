@@ -22,13 +22,14 @@ export class TaskController {
   constructor(private readonly taskService: TaskService) {}
 
   @Get()
+  @Roles(Role.USER)
   async findAll(@Request() req) {
     const userId = req.user.userId;
     return this.taskService.findAll(userId);
   }
 
   @Get('populate')
-  @UseGuards(ApiKeyGuard) // Temporarily disabled for testing
+  @UseGuards(ApiKeyGuard)
   async populate() {
     return this.taskService.populateFromExternalApi();
   }

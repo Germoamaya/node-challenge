@@ -3,6 +3,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MikroOrmModule } from '@mikro-orm/nestjs';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
@@ -12,6 +13,7 @@ import { User, RefreshToken } from '../../entities';
 @Module({
   imports: [
     PassportModule,
+    ThrottlerModule,
     MikroOrmModule.forFeature([User, RefreshToken]),
     JwtModule.registerAsync({
       imports: [ConfigModule],

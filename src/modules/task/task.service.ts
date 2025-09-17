@@ -1,12 +1,19 @@
-import { Task, User } from '../../entities';
-import { Role, TaskPriority } from '../../common/enums';
+import { firstValueFrom } from 'rxjs';
 import { EntityManager } from '@mikro-orm/core';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Task, User } from '../../entities';
+import { CacheOperation } from '../../common/enums';
+import { Role, TaskPriority } from '../../common/enums';
 import { CreateTaskDto, UpdateTaskDto } from './dtos';
 import { ExternalTaskDto } from './dtos/external-task.dto';
-import { firstValueFrom } from 'rxjs';
+interface CacheManager {
+  get(key: string): Promise<any>;
+  set(key: string, value: Task[], ttl?: number): Promise<void>;
+  del(key: string): Promise<void>;
+}
 
 @Injectable()
 export class TaskService {
@@ -14,14 +21,73 @@ export class TaskService {
     private readonly em: EntityManager,
     private readonly httpService: HttpService,
     private readonly eventEmitter: EventEmitter2,
+    @Inject(CACHE_MANAGER) private cacheManager: CacheManager,
   ) {}
 
+  private async updateTaskCache(
+    operation: CacheOperation,
+    task: Task,
+    userId: number,
+  ): Promise<void> {
+    const cacheKey = `tasks:${userId}`;
+    const cachedTasks: Task[] = await this.cacheManager.get(cacheKey);
+    if (!cachedTasks) return;
+
+    switch (operation) {
+      case CacheOperation.ADD:
+        {
+          cachedTasks.push(task);
+          await this.cacheManager.set(cacheKey, cachedTasks, 600000);
+        }
+        break;
+
+      case CacheOperation.UPDATE:
+        {
+          const taskIndex = cachedTasks.findIndex((t) => t.id === task.id);
+          if (taskIndex !== -1) {
+            cachedTasks[taskIndex] = task;
+            await this.cacheManager.set(cacheKey, cachedTasks, 600000);
+          }
+        }
+        break;
+
+      case CacheOperation.DELETE: {
+        const filteredTasks: Task[] = cachedTasks.filter(
+          (t) => t.id !== task.id,
+        );
+        await this.cacheManager.set(cacheKey, filteredTasks, 600000);
+        break;
+      }
+    }
+  }
+
   async findAll(userId: number): Promise<Task[]> {
-    return this.em.find(Task, { user: userId });
+    const cacheKey = `tasks:${userId}`;
+    const cachedTasks = await this.cacheManager.get(cacheKey);
+    if (cachedTasks) {
+      return cachedTasks;
+    }
+
+    const tasks = await this.em.find(Task, { user: userId });
+
+    await this.cacheManager.set(cacheKey, tasks, 600000);
+
+    return tasks;
   }
 
   async findOne(id: number, userId: number): Promise<Task> {
-    return this.em.findOneOrFail(Task, { id, user: userId });
+    const cacheKey = `tasks:${userId}`;
+    const cachedTasks: Task[] = await this.cacheManager.get(cacheKey);
+    if (cachedTasks) {
+      const task = cachedTasks.find((t) => t.id === id);
+      if (task) {
+        return task;
+      }
+    }
+
+    const task = await this.em.findOneOrFail(Task, { id, user: userId });
+    await this.updateTaskCache(CacheOperation.ADD, task, userId);
+    return task;
   }
 
   async create(dto: CreateTaskDto, userId: number): Promise<Task> {
@@ -31,7 +97,9 @@ export class TaskService {
       completed: false,
       description: dto.description || '',
     });
+
     await this.em.persistAndFlush(task);
+    await this.updateTaskCache(CacheOperation.ADD, task, userId);
     this.eventEmitter.emit('TASK_CREATED', task);
     return task;
   }
@@ -42,10 +110,11 @@ export class TaskService {
 
     task.completed = dto.completed;
     await this.em.persistAndFlush(task);
-
+    await this.updateTaskCache(CacheOperation.UPDATE, task, userId);
     if (dto.completed && !wasCompleted) {
       this.eventEmitter.emit('TASK_COMPLETED', task);
     }
+
     return task;
   }
 
@@ -54,15 +123,13 @@ export class TaskService {
     userId: number,
     userRoles?: string[],
   ): Promise<void> {
-    // If user has admin role, they can delete any task
-    if (userRoles?.includes(Role.ADMIN)) {
-      const task = await this.em.findOneOrFail(Task, { id });
-      await this.em.removeAndFlush(task);
-    } else {
-      // Regular users can only delete their own tasks
-      const task = await this.em.findOneOrFail(Task, { id, user: userId });
-      await this.em.removeAndFlush(task);
-    }
+    // Admin can delete any task, regular users can only delete their own
+    const query = userRoles?.includes(Role.ADMIN)
+      ? { id }
+      : { id, user: userId };
+    const task = await this.em.findOneOrFail(Task, query);
+    await this.em.removeAndFlush(task);
+    await this.updateTaskCache(CacheOperation.DELETE, task, task.user.id);
   }
 
   async populateFromExternalApi(): Promise<{
@@ -71,7 +138,6 @@ export class TaskService {
     skipped: number;
   }> {
     try {
-      // Fetch data from external API
       const response = await firstValueFrom(
         this.httpService.get<ExternalTaskDto[]>(
           'https://jsonplaceholder.typicode.com/todos',
@@ -83,7 +149,6 @@ export class TaskService {
       let skipped = 0;
 
       for (const externalTask of externalTasks) {
-        // Check if task already exists (by title)
         const existingTask = await this.em.findOne(Task, {
           title: externalTask.title,
         });
@@ -93,7 +158,6 @@ export class TaskService {
           continue;
         }
 
-        // Find existing user for this task
         const user = await this.em.findOne(User, { id: externalTask.userId });
         if (!user) {
           console.warn(
@@ -103,12 +167,11 @@ export class TaskService {
           continue;
         }
 
-        // Create task from external data
         const task = this.em.create(Task, {
           title: externalTask.title,
-          description: `External task ID: ${externalTask.id}`, // Store external ID in description
+          description: `External task ID: ${externalTask.id}`,
           completed: externalTask.completed,
-          priority: TaskPriority.MEDIUM, // Default priority for external tasks
+          priority: TaskPriority.MEDIUM,
           user: user,
         });
 
@@ -123,7 +186,9 @@ export class TaskService {
         skipped,
       };
     } catch (error) {
-      throw new Error(`Failed to populate from external API: ${error.message}`);
+      throw new Error(
+        `Failed to populate from external API: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
     }
   }
 }

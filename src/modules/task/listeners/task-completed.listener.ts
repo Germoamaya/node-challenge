@@ -5,7 +5,7 @@ export interface TaskCompletedEvent {
   taskId: number;
   userId: number;
   title: string;
-  completedAt: Date;
+  updatedAt: Date;
 }
 
 @Injectable()
@@ -13,9 +13,14 @@ export class TaskCompletedListener {
   private readonly logger = new Logger(TaskCompletedListener.name);
 
   @OnEvent('TASK_COMPLETED')
-  handleTaskCompleted(payload: TaskCompletedEvent) {
+  handleTaskCompleted({
+    taskId,
+    userId,
+    title,
+    updatedAt,
+  }: TaskCompletedEvent) {
     this.logger.log(
-      `🎉 Task completed: "${payload.title}" (ID: ${payload.taskId}) by user ${payload.userId} at ${payload.completedAt.toISOString()}`,
+      `Task completed: "${title}" (ID: ${taskId}) by user ${userId} at ${updatedAt.toISOString()}`,
     );
   }
 }

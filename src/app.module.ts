@@ -14,6 +14,7 @@ import { GuardsModule } from './common/guards/guards.module';
     ConfigModule.forRoot({
       isGlobal: true,
     }),
+    EventEmitterModule.forRoot(),
     MikroOrmModule.forRootAsync({
       useFactory: getDatabaseConfig,
       inject: [ConfigService],
@@ -22,7 +23,6 @@ import { GuardsModule } from './common/guards/guards.module';
     TaskModule,
     AuthModule,
     GuardsModule,
-    EventEmitterModule.forRoot(),
   ],
   controllers: [AppController],
 })

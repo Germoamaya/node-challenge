@@ -14,7 +14,6 @@ export class DatabaseSeeder extends Seeder {
     this.logger.log(
       `Seeding database with seeders: ${chalk.green(seeders.map((s) => s.name).join(', '))}`,
     );
-
     this.logger.log(`Default user password: ${chalk.green('password123')}`);
 
     return this.call(em, seeders);

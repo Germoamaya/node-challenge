@@ -1,9 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
+import { User } from 'src/entities/user.entity';
 
 export interface TaskCreatedEvent {
-  taskId: number;
-  userId: number;
+  id: number;
+  user: User;
   title: string;
   createdAt: Date;
 }
@@ -13,9 +14,9 @@ export class TaskCreatedListener {
   private readonly logger = new Logger(TaskCreatedListener.name);
 
   @OnEvent('TASK_CREATED')
-  handleTaskCreated(payload: TaskCreatedEvent) {
+  handleTaskCreated({ id, user, title, createdAt }: TaskCreatedEvent) {
     this.logger.log(
-      `✅ Task created: "${payload.title}" (ID: ${payload.taskId}) by user ${payload.userId} at ${payload.createdAt.toISOString()}`,
+      `Task created: "${title}" (ID: ${id}) by user ${user.id} at ${createdAt.toISOString()}`,
     );
   }
 }
