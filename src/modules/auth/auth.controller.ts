@@ -83,6 +83,7 @@ export class AuthController {
     return await this.authService.login(loginDto.username, loginDto.password);
   }
 
+  @Public()
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({

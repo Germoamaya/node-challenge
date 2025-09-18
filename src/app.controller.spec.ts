@@ -1,22 +1,38 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { MikroORM } from '@mikro-orm/core';
 import { AppController } from './app.controller';
-import { AppService } from './app.service';
 
 describe('AppController', () => {
   let appController: AppController;
 
   beforeEach(async () => {
+    const mockOrm = {
+      em: {
+        getConnection: () => ({
+          execute: jest.fn().mockResolvedValue({}),
+        }),
+      },
+    };
+
     const app: TestingModule = await Test.createTestingModule({
       controllers: [AppController],
-      providers: [AppService],
+      providers: [
+        {
+          provide: MikroORM,
+          useValue: mockOrm,
+        },
+      ],
     }).compile();
 
     appController = app.get<AppController>(AppController);
   });
 
-  describe('root', () => {
-    it('should return "Hello World!"', () => {
-      expect(appController.getHello()).toBe('Hello World!');
+  describe('health', () => {
+    it('should return health status', async () => {
+      const result = await appController.healthCheck();
+      expect(result).toHaveProperty('status');
+      expect(result).toHaveProperty('timestamp');
+      expect(result).toHaveProperty('database');
     });
   });
 });

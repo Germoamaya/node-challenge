@@ -20,6 +20,8 @@ export const getDatabaseConfig = (configService: ConfigService): Options => {
       disableForeignKeys: true,
     },
     migrations: {
+      path: 'dist/database/migrations',
+      pathTs: 'src/database/migrations',
       disableForeignKeys: true,
     },
     seeder: {

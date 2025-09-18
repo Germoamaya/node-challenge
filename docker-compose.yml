@@ -1,0 +1,108 @@
+version: '3.8'
+
+services:
+  # Main NestJS API application
+  app:
+    build: .
+    container_name: task-api
+    ports:
+      - "3000:3000"
+    environment:
+      # Database configuration
+      - NODE_ENV=production
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=taskdb
+      - DB_USER=postgres
+      - DB_PASSWORD=password
+      
+      # Redis configuration
+      - REDIS_URL=redis://:redispassword@redis:6379
+      
+      # JWT secrets (in production, use proper secrets management)
+      - JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
+      - JWT_REFRESH_SECRET=your-super-secret-refresh-key-change-this-in-production
+      
+      # API key for external endpoints
+      - API_KEY=populate-api-key
+      
+      # Port configuration
+      - PORT=3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - task-network
+
+  # PostgreSQL database
+  postgres:
+    image: postgres:15-alpine
+    container_name: task-postgres
+    environment:
+      POSTGRES_DB: taskdb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+    ports:
+      - "5433:5433"
+    volumes:
+      # Persist database data
+      - postgres_data:/var/lib/postgresql/data
+      # Optional: Add initialization scripts
+      - ./database/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d taskdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - task-network
+
+  # Redis cache
+  redis:
+    image: redis:7-alpine
+    container_name: task-redis
+    command: redis-server --appendonly yes --requirepass redispassword
+    ports:
+      - "6379:6379"
+    volumes:
+      # Persist Redis data
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - task-network
+
+  # Optional: Redis Commander for Redis management UI
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: redis-commander
+    environment:
+      REDIS_HOSTS: local:redis:6379:0:redispassword
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
+    restart: unless-stopped
+    networks:
+      - task-network
+
+# Named volumes for data persistence
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+# Custom network for service communication
+networks:
+  task-network:
+    driver: bridge

@@ -11,16 +11,13 @@ async function bootstrap() {
     const generator = orm.getSchemaGenerator();
 
     // Ensure database schema is up to date
-    console.log('Updating database schema...');
     await generator.updateSchema();
 
     // Run seeding using MikroORM seeder
     const seeder = orm.getSeeder();
     await seeder.seed(DatabaseSeeder);
-
-    console.log('Database seeding completed successfully!');
   } catch (error) {
-    console.error('❌ Error during seeding:', error);
+    process.stderr.write(`Error during seeding: ${error}\n`);
     process.exit(1);
   } finally {
     await app.close();

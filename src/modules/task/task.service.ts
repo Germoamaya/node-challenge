@@ -145,9 +145,6 @@ export class TaskService {
 
         const user = await this.em.findOne(User, { id: externalTask.userId });
         if (!user) {
-          console.warn(
-            `User with ID ${externalTask.userId} not found. Skipping task ${externalTask.id}`,
-          );
           skipped++;
           continue;
         }

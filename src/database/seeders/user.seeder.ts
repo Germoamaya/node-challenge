@@ -1,7 +1,6 @@
 import { EntityManager } from '@mikro-orm/core';
 import { Seeder } from '@mikro-orm/seeder';
 import { Logger } from '@nestjs/common';
-import chalk from 'chalk';
 import { User } from '../../entities';
 import { Role } from '../../common/enums';
 import * as argon2 from 'argon2';
@@ -10,15 +9,13 @@ export class UserSeeder extends Seeder {
   public logger = new Logger('UserSeeder');
 
   async run(em: EntityManager): Promise<void> {
-    this.logger.log(chalk.green('🌱 Starting user seeding...'));
+    this.logger.log('🌱 Starting user seeding...');
 
     // Check if users already exist
     const existingUsers = await em.count(User);
     if (existingUsers > 0) {
       this.logger.log(
-        chalk.yellow(
-          `✅ Users already exist (${existingUsers} found). Skipping seeding.`,
-        ),
+        `✅ Users already exist (${existingUsers} found). Skipping seeding.`,
       );
       return;
     }
@@ -51,9 +48,7 @@ export class UserSeeder extends Seeder {
     await em.flush();
 
     this.logger.log(
-      chalk.green(
-        `✅ Successfully created ${users.length} users (10 regular + 1 admin)`,
-      ),
+      `✅ Successfully created ${users.length} users (10 regular + 1 admin)`,
     );
   }
 }
