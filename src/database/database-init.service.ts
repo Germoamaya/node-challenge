@@ -29,11 +29,6 @@ export class DatabaseInitService implements OnModuleInit {
       await generator.updateSchema();
       this.logger.log('Database schema updated');
 
-      // Run migrations if any exist
-      const migrator = this.orm.getMigrator();
-      await migrator.up();
-      this.logger.log('Migrations executed');
-
       // Run seeding if database is empty
       const em = this.orm.em.fork();
       const userCount = await em.count('User');
